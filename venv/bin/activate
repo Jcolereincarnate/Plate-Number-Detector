@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="/Users/mac/Desktop/Ini Plate Number Detector/desktop_app/venv"
+VIRTUAL_ENV="/Users/mac/Desktop/Final Year Project/Ini Project Stuff/Ini Plate Number Detector/desktop_app/venv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

@@ -1,5 +1,5 @@
 #!/bin/sh
-'''exec' "/Users/mac/Desktop/Ini Plate Number Detector/desktop_app/venv/bin/python3.11" "$0" "$@"
+'''exec' "/Users/mac/Desktop/Final Year Project/Ini Project Stuff/Ini Plate Number Detector/desktop_app/venv/bin/python3.11" "$0" "$@"
 ' '''
 import sys
 from easyocr.cli import main

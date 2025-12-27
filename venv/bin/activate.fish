@@ -30,7 +30,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV "/Users/mac/Desktop/Ini Plate Number Detector/desktop_app/venv"
+set -gx VIRTUAL_ENV "/Users/mac/Desktop/Final Year Project/Ini Project Stuff/Ini Plate Number Detector/desktop_app/venv"
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/bin" $PATH
