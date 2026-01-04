@@ -8,6 +8,7 @@ import PIL.Image
 import PIL.ImageTk
 import re
 from config import PLATE_PATTERNS
+import signal
 class VideoStreamWindow:
     def __init__(self, parent, app):
         self.window = tk.Toplevel(parent)
@@ -17,9 +18,10 @@ class VideoStreamWindow:
         self.app = app
         self.is_running = False
         self.cap = None
-        self.detection_cooldown = {}  # Track detection cooldowns
+        self.detection_cooldown = {}
+        self.is_detecting = False  # Add flag to prevent overlapping detections
+        self.detection_count = 0
         self.setup_ui()
-        self.database = Database()
     
     def setup_ui(self):
         # Header
@@ -29,7 +31,7 @@ class VideoStreamWindow:
         
         tk.Label(
             header,
-            text="📹 Live Video Stream",
+            text="Live Video Stream",
             font=("Segoe UI", 14, "bold"),
             bg="#1e293b",
             fg="#e2e8f0"
@@ -108,7 +110,10 @@ class VideoStreamWindow:
         self.window.protocol("WM_DELETE_WINDOW", self.close_window)
     
     def start_stream(self):
-        """Start video stream"""
+        if not self.app.reader:
+            messagebox.showwarning("OCR Not Ready", "OCR Engine is still loading. Please wait.")
+            return
+        
         self.cap = cv2.VideoCapture(0)
         if not self.cap.isOpened():
             messagebox.showerror("Error", "Could not open camera")
@@ -118,11 +123,9 @@ class VideoStreamWindow:
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
         self.status_indicator.config(text="● Live", fg="#10b981")
-        
         threading.Thread(target=self.process_stream, daemon=True).start()
     
     def stop_stream(self):
-        """Stop video stream"""
         self.is_running = False
         if self.cap:
             self.cap.release()
@@ -131,61 +134,116 @@ class VideoStreamWindow:
         self.status_indicator.config(text="● Stopped", fg="#ef4444")
     
     def process_stream(self):
-        """Process video stream and detect plates"""
         frame_count = 0
-        detection_frame = None
+        last_detection_frame = -100
         
         while self.is_running:
             ret, frame = self.cap.read()
             if not ret:
+                print("Failed to read frame")
                 break
             
             display_frame = frame.copy()
             
-            # Process every 15 frames for detection (more frequent)
-            if frame_count % 15 == 0 and self.app.reader:
+            # Add status text to frame
+            status_text = f"Frame: {frame_count} | Detections: {self.detection_count}"
+            if self.is_detecting:
+                status_text += " | DETECTING..."
+            cv2.putText(display_frame, status_text, (10, 30), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            
+            # Only trigger detection if:
+            # 1. Every 30 frames (slower rate)
+            # 2. OCR reader is loaded
+            # 3. Not currently detecting
+            # 4. At least 30 frames since last detection
+            if (frame_count % 30 == 0 and 
+                self.app.reader and 
+                not self.is_detecting and 
+                frame_count - last_detection_frame >= 30):
+                self.is_detecting = True
+                last_detection_frame = frame_count
                 detection_frame = frame.copy()
+                
+                # Start detection in background
                 threading.Thread(
                     target=self.detect_in_frame,
-                    args=(detection_frame, display_frame),
+                    args=(detection_frame, frame_count),
                     daemon=True
                 ).start()
             
-            # Display frame
-            rgb_frame = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
-            img = PIL.Image.fromarray(rgb_frame)
-            img.thumbnail((1160, 650))
-            imgtk = PIL.ImageTk.PhotoImage(image=img)
-            
-            if self.window.winfo_exists():
+            # Display frame - with error handling
+            try:
+                if not self.window.winfo_exists():
+                    print("Window closed, stopping stream")
+                    break
+                    
+                rgb_frame = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
+                img = PIL.Image.fromarray(rgb_frame)
+                img.thumbnail((1160, 650))
+                imgtk = PIL.ImageTk.PhotoImage(image=img)
+                
                 self.video_label.imgtk = imgtk
                 self.video_label.configure(image=imgtk)
-            else:
+            except tk.TclError:
+                print("Display error, window likely closed")
+                break
+            except Exception as e:
+                print(f"Display error: {e}")
                 break
             
             frame_count += 1
             time.sleep(0.033)  # ~30 FPS
-    
-    def detect_in_frame(self, frame, display_frame=None):
+        
+        # Clean up
+        self.is_running = False
+        if self.cap and self.cap.isOpened():
+            self.cap.release()
+    def detect_in_frame(self, frame, frame_number):
         """Detect plate in a single frame"""
+        start_time = time.time()
         try:
-            # Show processing indicator
-            if display_frame is not None and self.window.winfo_exists():
-                cv2.putText(display_frame, "Scanning...", (10, 30), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            
+            # Step 1: Preprocessing
+            print(f"[Frame {frame_number}] Preprocessing image...")
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             bfilter = cv2.bilateralFilter(gray, 11, 17, 17)
             
+            # Apply additional preprocessing for better detection
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            enhanced = clahe.apply(bfilter)
+            
+            preprocess_time = time.time()
+            print(f"[Frame {frame_number}] Preprocessing done ({preprocess_time - start_time:.2f}s)")
+            
+            # Step 2: Run OCR with timeout warning
+            print(f"[Frame {frame_number}] Running OCR (this may take 2-5 seconds)...")
+            ocr_start = time.time()
+            
             results = self.app.reader.readtext(
-                bfilter,
+                enhanced,
                 allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-',
-                paragraph=False
+                paragraph=False,
+                detail=1,
+                min_size=10,
+                text_threshold=0.5,  # Slightly higher for better accuracy
+                low_text=0.4
             )
             
-            if not results:
+            ocr_time = time.time() - ocr_start
+            print(f"[Frame {frame_number}]OCR completed in {ocr_time:.2f}s")
+            print(f"[Frame {frame_number}]Found {len(results)} text regions")
+            
+            # If no results after all that time
+            if len(results) == 0:
+                print(f"[Frame {frame_number}] NO TEXT DETECTED")
+                print(f"[Frame {frame_number}] Suggestions:")
+                print(f"   • Is there a license plate visible?")
+                print(f"   • Is it in focus and well-lit?")
+                print(f"   • Try holding a printed plate closer to camera")
+                self.is_detecting = False
                 return
             
+            # Step 3: Process results
             best_match = None
             max_conf = 0
             best_plate_type = None
@@ -196,27 +254,37 @@ class VideoStreamWindow:
                 "EXCELLENCE", "STATE", "NIGERIA", "GOVERNMENT"
             ]
             
-            for (box, text, prob) in results:
+            for idx, (box, text, prob) in enumerate(results):
                 clean_text = text.replace(" ", "").replace("-", "").upper()
+                print(f"[Frame {frame_number}]   #{idx+1}: '{clean_text}' (conf: {prob:.3f})")
                 
                 # Skip slogans and short text
                 if any(keyword in clean_text for keyword in slogan_keywords):
+                    print(f"[Frame {frame_number}]      Skipped (slogan)")
                     continue
                 if len(clean_text) < 5:
+                    print(f"[Frame {frame_number}]      Skipped (too short)")
                     continue
                 
                 # Check against all patterns
+                matched = False
                 for plate_type, pattern in PLATE_PATTERNS.items():
                     if re.match(pattern, clean_text):
+                        print(f"[Frame {frame_number}]      Matched {plate_type} pattern!")
                         if prob > max_conf:
                             max_conf = prob
                             best_match = clean_text
                             bbox = box
                             best_plate_type = plate_type
+                        matched = True
                         break
+                
+                if not matched:
+                    print(f"[Frame {frame_number}]      No pattern match")
             
-            # If no exact match, try fuzzy matching
+            # Fuzzy matching if needed
             if not best_match:
+                print(f"[Frame {frame_number}]  Trying fuzzy matching...")
                 for (box, text, prob) in results:
                     clean_text = text.replace(" ", "").replace("-", "").upper()
                     
@@ -233,12 +301,19 @@ class VideoStreamWindow:
                         best_match = clean_text
                         bbox = box
                         best_plate_type = 'standard'
+                        print(f"[Frame {frame_number}]    Fuzzy match: {clean_text}")
             
-            if best_match and max_conf > 0.4:  # Lower threshold for video
-                # Check cooldown (don't detect same plate within 3 seconds)
+            # Step 4: Process detection if found
+            if best_match and max_conf > 0.35:
+                print(f"[Frame {frame_number}] CANDIDATE FOUND: '{best_match}' (conf: {max_conf:.3f})")
+                
+                # Check cooldown
                 current_time = time.time()
                 if best_match in self.detection_cooldown:
-                    if current_time - self.detection_cooldown[best_match] < 3:
+                    time_since = current_time - self.detection_cooldown[best_match]
+                    if time_since < 3:
+                        print(f"[Frame {frame_number}] Cooldown active ({3 - time_since:.1f}s remaining)")
+                        self.is_detecting = False
                         return
                 
                 self.detection_cooldown[best_match] = current_time
@@ -249,15 +324,20 @@ class VideoStreamWindow:
                     if not best_plate_type:
                         best_plate_type = 'standard'
                 
+                print(f"[Frame {frame_number}]  Detecting color...")
                 plate_color = self.app.detect_plate_color(bbox, frame)
+                
+                print(f"[Frame {frame_number}]  Formatting...")
                 formatted_text = self.app.format_plate_number(best_match, best_plate_type)
                 
                 if not formatted_text:
                     formatted_text = best_match
                 
+                print(f"[Frame {frame_number}] Getting vehicle details...")
                 extra_info = self.app.get_vehicle_details(formatted_text, best_plate_type, max_conf, plate_color)
                 
                 # Save to database
+                print(f"[Frame {frame_number}] Saving to database...")
                 plate_data = {
                     'plate_number': formatted_text,
                     'plate_category': extra_info['plate_category'],
@@ -268,28 +348,49 @@ class VideoStreamWindow:
                     'detection_time': extra_info['current_time'],
                     'source': 'video'
                 }
-                self.database.add_detection(plate_data)
+                self.app.database.add_detection(plate_data)
+                
+                # Update counter
+                self.detection_count += 1
                 
                 # Update history panel
                 if hasattr(self.app, 'history_panel'):
-                    self.window.after(0, self.app.history_panel.refresh)
+                    try:
+                        self.window.after(0, self.app.history_panel.refresh)
+                    except:
+                        pass
                 
-                # Show detection notification
-                print(f"✓ Detected: {formatted_text} - {extra_info['vehicle_type']} ({extra_info['confidence']}%)")
+                # Show success
+                total_time = time.time() - start_time
+                print(f"✅ PLATE DETECTED! (Total time: {total_time:.2f}s)")
+                print(f"   Plate: {formatted_text}")
+                print(f"   Type: {extra_info['vehicle_type']}")
+                print(f"   Owner: {extra_info['registered_owner']}")
+                print(f"   Confidence: {extra_info['confidence']}%")
                 
-                # Draw bounding box on display frame
-                if bbox is not None and display_frame is not None:
-                    top_left = tuple(map(int, bbox[0]))
-                    bottom_right = tuple(map(int, bbox[2]))
-                    cv2.rectangle(display_frame, top_left, bottom_right, (0, 255, 0), 3)
-                    cv2.putText(display_frame, formatted_text, (top_left[0], top_left[1] - 10),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-        
+            else:
+                if best_match:
+                    print(f"[Frame {frame_number}]  Confidence too low: {max_conf:.3f} < 0.35")
+                else:
+                    print(f"[Frame {frame_number}]  No valid plate pattern found")
+            
+            # Mark detection as complete
+            total_time = time.time() - start_time
+            print(f"[Frame {frame_number}]  Total detection time: {total_time:.2f}s")
+            
         except Exception as e:
-            print(f"Detection error: {e}")
+            print(f"[Frame {frame_number}]  ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        finally:
+            # Always release the detection lock
+            self.is_detecting = False
+            print(f"[Frame {frame_number}]  Detection thread finished\n")
     
     def close_window(self):
         """Close the video window"""
+        print("Closing video window...")
         self.stop_stream()
         self.window.destroy()
-
+        print("Video window closed")

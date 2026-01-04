@@ -1,6 +1,6 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox
 from tkinter import ttk
+from tkinter import filedialog, messagebox
 import cv2
 import PIL.Image
 import PIL.ImageTk
@@ -11,19 +11,12 @@ import numpy as np
 import os
 from datetime import datetime
 import pytz
-import sqlite3
 from database import Database
 from videostream import VideoStreamWindow
 from result import ResultsWindow
 from history import HistoryPanel
+from config import PLATE_PATTERNS
 
-PLATE_PATTERNS = {
-    'standard': r'^[A-Z]{3}-?\d{3}[A-Z]{2}$', 
-    'government': r'^[A-Z]{2}-?\d{2,4}-?[A-Z]{2}$',  
-    'police': r'^(POL|NPF)-?\d{4,5}[A-Z]?$', 
-    'military': r'^(NA|NAF|NN)-?\d{3,5}[A-Z]?$', 
-    'diplomatic': r'^(CD|CMD|CC)-?\d{3,4}[A-Z]?$',
-}
 class PlateReaderApp:
     def __init__(self, root):
         self.root = root
@@ -160,85 +153,92 @@ class PlateReaderApp:
         self.show_placeholder()
         
         # Action buttons section
+        # Action buttons section
         button_section = tk.Frame(hero_section, bg="#0f172a")
         button_section.pack(pady=(30, 0))
-        
-        btn_style = {
-            "font": ("Segoe UI", 11, "bold"),
-            "bd": 0,
-            "relief": tk.FLAT,
-            "cursor": "hand2",
-            "padx": 25,
-            "pady": 16
-        }
-        
+
         # Upload button
         upload_btn = tk.Button(
             button_section,
             text="📁  Upload Image",
             command=self.upload_image,
-            bg="#2563eb",
-            fg="#ffffff",
-            activebackground="#1d4ed8",
-            activeforeground="#ffffff",
-            **btn_style
+            font=("Segoe UI", 11, "bold"),
+            bd=0,
+            relief=tk.FLAT,
+            cursor="hand2",
+            padx=25,
+            pady=16,
+            highlightthickness=0
         )
+        upload_btn.configure(bg="#2563eb", fg="#ffffff", activebackground="#1d4ed8", activeforeground="#ffffff")
         upload_btn.pack(side=tk.LEFT, padx=6)
-        
+
         # Camera button
         camera_btn = tk.Button(
             button_section,
             text="📷  Capture Photo",
             command=self.open_camera,
-            bg="#7c3aed",
-            fg="#ffffff",
-            activebackground="#6d28d9",
-            activeforeground="#ffffff",
-            **btn_style
+            font=("Segoe UI", 11, "bold"),
+            bd=0,
+            relief=tk.FLAT,
+            cursor="hand2",
+            padx=25,
+            pady=16,
+            highlightthickness=0
         )
+        camera_btn.configure(bg="#7c3aed", fg="#ffffff", activebackground="#6d28d9", activeforeground="#ffffff")
         camera_btn.pack(side=tk.LEFT, padx=6)
-        
+
         # Video stream button
         self.video_btn = tk.Button(
             button_section,
             text="📹  Video Stream",
             command=self.open_video_stream,
-            bg="#f59e0b",
-            fg="#ffffff",
-            activebackground="#d97706",
-            activeforeground="#ffffff",
+            font=("Segoe UI", 11, "bold"),
+            bd=0,
+            relief=tk.FLAT,
+            cursor="hand2",
+            padx=25,
+            pady=16,
             state=tk.DISABLED,
-            **btn_style
+            highlightthickness=0
         )
+        self.video_btn.configure(bg="#f59e0b", fg="#ffffff", activebackground="#d97706", activeforeground="#ffffff")
         self.video_btn.pack(side=tk.LEFT, padx=6)
-        
+
         # Detect button
         self.detect_btn = tk.Button(
             button_section,
             text="🔍  Detect Plate",
             command=self.process_image,
-            bg="#059669",
-            fg="#ffffff",
-            activebackground="#047857",
-            activeforeground="#ffffff",
+            font=("Segoe UI", 11, "bold"),
+            bd=0,
+            relief=tk.FLAT,
+            cursor="hand2",
+            padx=25,
+            pady=16,
             state=tk.DISABLED,
-            **btn_style
+            highlightthickness=0
         )
+        self.detect_btn.configure(bg="#059669", fg="#ffffff", activebackground="#047857", activeforeground="#ffffff")
         self.detect_btn.pack(side=tk.LEFT, padx=6)
-        
+
         # Clear button
         clear_btn = tk.Button(
             button_section,
             text="🗑️  Clear",
             command=self.clear_all,
-            bg="#475569",
-            fg="#f1f5f9",
-            activebackground="#334155",
-            activeforeground="#ffffff",
-            **btn_style
+            font=("Segoe UI", 11, "bold"),
+            bd=0,
+            relief=tk.FLAT,
+            cursor="hand2",
+            padx=25,
+            pady=16,
+            highlightthickness=0
         )
+        clear_btn.configure(bg="#475569", fg="#ffffff", activebackground="#334155", activeforeground="#ffffff")
         clear_btn.pack(side=tk.LEFT, padx=6)
-        
+
         # Add hover effects
         for btn, hover_color, normal_color in [
             (upload_btn, "#1d4ed8", "#2563eb"),
@@ -249,7 +249,7 @@ class PlateReaderApp:
         ]:
             btn.bind("<Enter>", lambda e, b=btn, c=hover_color: b.config(bg=c))
             btn.bind("<Leave>", lambda e, b=btn, c=normal_color: b.config(bg=c))
-        
+                
         self.current_image_path = None
         self.cv_image = None
 
@@ -793,3 +793,5 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = PlateReaderApp(root)
     root.mainloop()
+    
+    
