@@ -20,7 +20,7 @@ from config import PLATE_PATTERNS
 class PlateReaderApp:
     def __init__(self, root):
         self.root = root
-        self.root.title('ANPRSystem - License Plate Recognition')
+        self.root.title('ANPR System - License Plate Recognition')
         self.root.geometry('1600x900')
         self.root.configure(bg="#0f172a")
         self.reader = None
