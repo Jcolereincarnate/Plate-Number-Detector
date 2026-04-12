@@ -17,7 +17,7 @@ class HistoryPanel:
         
         tk.Label(
             header,
-            text="📊 Detection History",
+            text="Detection History",
             font=("Segoe UI", 14, "bold"),
             bg="#1e293b",
             fg="#e2e8f0"
@@ -58,12 +58,11 @@ class HistoryPanel:
         # Clear button
         clear_btn = tk.Button(
             self.frame,
-            text="🗑️ Clear History",
+            text="Clear History",
             command=self.clear_history,
-            font=("Segoe UI", 9, "bold"),
-            bg="#475569",
-            fg="#f1f5f9",
-            activebackground="#334155",
+            bg="#2563eb", fg="#000000", 
+            activebackground="#1d4ed8", 
+            activeforeground="#000000",
             bd=0,
             pady=10,
             cursor="hand2"
