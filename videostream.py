@@ -63,7 +63,7 @@ class VideoStreamWindow:
         
         self.start_btn = tk.Button(
             btn_container,
-            text="▶ Start Stream",
+            text="Start Stream",
             command=self.start_stream,
             font=("Segoe UI", 11, "bold"),
             bg="#059669",
@@ -78,7 +78,7 @@ class VideoStreamWindow:
         
         self.stop_btn = tk.Button(
             btn_container,
-            text="⏸ Stop Stream",
+            text="Stop Stream",
             command=self.stop_stream,
             font=("Segoe UI", 11, "bold"),
             bg="#dc2626",
@@ -94,7 +94,7 @@ class VideoStreamWindow:
         
         close_btn = tk.Button(
             btn_container,
-            text="✕ Close",
+            text="Close",
             command=self.close_window,
             font=("Segoe UI", 11, "bold"),
             bg="#475569",
@@ -362,7 +362,7 @@ class VideoStreamWindow:
                 
                 # Show success
                 total_time = time.time() - start_time
-                print(f"✅ PLATE DETECTED! (Total time: {total_time:.2f}s)")
+                print(f"PLATE DETECTED! (Total time: {total_time:.2f}s)")
                 print(f"   Plate: {formatted_text}")
                 print(f"   Type: {extra_info['vehicle_type']}")
                 print(f"   Owner: {extra_info['registered_owner']}")
