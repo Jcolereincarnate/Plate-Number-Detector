@@ -99,7 +99,7 @@ class VideoStreamWindow:
             font=("Segoe UI", 11, "bold"),
             bg="#000000",
             fg="#f1f5f9",
-            activebackground="#334155",
+            activebackground="#000000",
             bd=0,
             padx=30,
             pady=12,
